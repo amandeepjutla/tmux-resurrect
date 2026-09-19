@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ktab integration by Kera (GPT-6 Astra). Created 2026-09-19.
+# ktab and last-command integration by Kera (GPT-6 Astra). Created 2026-09-19.
 
 CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -7,6 +7,7 @@ source "$CURRENT_DIR/variables.sh"
 source "$CURRENT_DIR/helpers.sh"
 source "$CURRENT_DIR/spinner_helpers.sh"
 source "$CURRENT_DIR/ktab.sh"
+source "$CURRENT_DIR/command_helpers.sh"
 
 # delimiters
 d=$'\t'
@@ -203,6 +204,8 @@ dump_panes() {
 			echo "${line_type}${d}${session_name}${d}${window_number}${d}${window_active}${d}${window_flags}${d}${pane_index}${d}${pane_title}${d}${dir}${d}${pane_active}${d}${pane_command}${d}:${full_command}"
 			if [ "$ktab_sidebar" = "1" ]; then
 				printf 'ktab-pane\t%s\t%s\t%s\n' "$session_name" "$window_number" "$pane_index"
+			else
+				save_last_command "$session_name" "$window_number" "$pane_index"
 			fi
 		done
 }

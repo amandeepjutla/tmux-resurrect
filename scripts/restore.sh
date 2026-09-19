@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ktab integration by Kera (GPT-6 Astra). Created 2026-09-19.
+# ktab integration and command notices by Kera (GPT-6 Astra). Created 2026-09-19.
 
 CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -8,6 +8,7 @@ source "$CURRENT_DIR/helpers.sh"
 source "$CURRENT_DIR/process_restore_helpers.sh"
 source "$CURRENT_DIR/spinner_helpers.sh"
 source "$CURRENT_DIR/ktab.sh"
+source "$CURRENT_DIR/command_helpers.sh"
 
 # delimiter
 d=$'\t'
@@ -122,7 +123,31 @@ tmux_default_command() {
 }
 
 pane_creation_command() {
-	echo "cat '$(pane_contents_file "restore" "${1}:${2}.${3}")'; exec $(tmux_default_command)"
+	local contents=""
+	local pane_id="${1}:${2}.${3}"
+	if is_restoring_pane_contents && pane_contents_file_exists "$pane_id"; then
+		contents="$(pane_contents_file "restore" "$pane_id")"
+	fi
+	if [ -n "$RESTORE_COMMAND_NOTICE" ]; then
+		# Quote every argument as data for the pane's shell (including Fish).
+		# The helper prints the saved command, then starts the configured shell.
+		local argument
+		printf 'exec /bin/bash'
+		for argument in "$CURRENT_DIR/restore_command_notice.sh" "$RESTORE_COMMAND_NOTICE" \
+			"$(get_tmux_option 'default-shell' '/bin/sh')" \
+			"$(get_tmux_option 'default-command' '')" "$contents"; do
+			argument=${argument//\'/\'\\\'\'}
+			printf " '%s'" "$argument"
+		done
+		printf '\n'
+	else
+		echo "cat '$contents'; exec $(tmux_default_command)"
+	fi
+}
+
+use_pane_creation_command() {
+	[ -n "$RESTORE_COMMAND_NOTICE" ] ||
+		{ is_restoring_pane_contents && pane_contents_file_exists "${1}:${2}.${3}"; }
 }
 
 new_window() {
@@ -132,7 +157,7 @@ new_window() {
 	local pane_index="$4"
 	local pane_id="${session_name}:${window_number}.${pane_index}"
 	dir="${dir/#\~/$HOME}"
-	if is_restoring_pane_contents && pane_contents_file_exists "$pane_id"; then
+	if use_pane_creation_command "$session_name" "$window_number" "$pane_index"; then
 		local pane_creation_command="$(pane_creation_command "$session_name" "$window_number" "$pane_index")"
 		tmux new-window -d -t "${session_name}:${window_number}" -c "$dir" "$pane_creation_command"
 	else
@@ -146,7 +171,7 @@ new_session() {
 	local dir="$3"
 	local pane_index="$4"
 	local pane_id="${session_name}:${window_number}.${pane_index}"
-	if is_restoring_pane_contents && pane_contents_file_exists "$pane_id"; then
+	if use_pane_creation_command "$session_name" "$window_number" "$pane_index"; then
 		local pane_creation_command="$(pane_creation_command "$session_name" "$window_number" "$pane_index")"
 		TMUX="" tmux -S "$(tmux_socket)" new-session -d -s "$session_name" -c "$dir" "$pane_creation_command"
 	else
@@ -165,7 +190,7 @@ new_pane() {
 	local dir="$3"
 	local pane_index="$4"
 	local pane_id="${session_name}:${window_number}.${pane_index}"
-	if is_restoring_pane_contents && pane_contents_file_exists "$pane_id"; then
+	if use_pane_creation_command "$session_name" "$window_number" "$pane_index"; then
 		local pane_creation_command="$(pane_creation_command "$session_name" "$window_number" "$pane_index")"
 		tmux split-window -t "${session_name}:${window_number}" -c "$dir" "$pane_creation_command"
 	else
@@ -178,10 +203,19 @@ new_pane() {
 restore_pane() {
 	local pane="$1"
 	local pane_created
-	while IFS=$d read line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_full_command; do
+	local RESTORE_COMMAND_NOTICE=""
+	local last_command
+	while IFS=$d read -r line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_full_command; do
 		pane_created="false"
 		dir="$(remove_first_char "$dir")"
-		pane_full_command="$(remove_first_char "$pane_full_command")"
+		# save.sh escapes spaces in this field; raw reads preserve command text.
+		dir="${dir//\\ / }"
+		pane_full_command="${pane_full_command#:}"
+		last_command="$(saved_last_command "$session_name" "$window_number" "$pane_index")"
+		if [ "$(get_tmux_option '@resurrect-show-command' 'on')" = 'on' ] &&
+			! ktab_saved_sidebar "$session_name" "$window_number" "$pane_index"; then
+			RESTORE_COMMAND_NOTICE="${last_command:-$pane_full_command}"
+		fi
 		if [ "$session_name" == "0" ]; then
 			restored_session_0_true
 		fi
@@ -210,13 +244,17 @@ restore_pane() {
 		fi
 		# set pane title
 		tmux select-pane -t "$session_name:$window_number.$pane_index" -T "$pane_title"
+		# Preserve the remembered command through another save before any input.
+		if [ "$pane_created" = 'true' ] && [ -n "$last_command" ]; then
+			tmux set-option -pq -t "$session_name:$window_number.$pane_index" @resurrect-last-command "$last_command"
+		fi
 		# Only newly restored panes may become sidebar placeholders. An existing
 		# content pane at the same saved index must never be respawned as ktab.
 		if [ "$pane_created" = "true" ] && [ "$KTAB_RESTORE_ACTIVE" = "true" ] &&
 			ktab_saved_sidebar "$session_name" "$window_number" "$pane_index"; then
 			tmux set-option -p -t "$session_name:$window_number.$pane_index" @ktab_sidebar 1
 		fi
-	done < <(echo "$pane")
+	done < <(printf '%s\n' "$pane")
 }
 
 restore_state() {
@@ -281,7 +319,7 @@ restore_all_panes() {
 	if is_restoring_pane_contents; then
 		pane_content_files_restore_from_archive
 	fi
-	while read line; do
+	while IFS= read -r line; do
 		if is_line_type "pane" "$line"; then
 			restore_pane "$line"
 		fi
