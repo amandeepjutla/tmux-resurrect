@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
+# ktab integration by Kera (GPT-6 Astra). Created 2026-09-19.
 
 CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 source "$CURRENT_DIR/variables.sh"
 source "$CURRENT_DIR/helpers.sh"
 source "$CURRENT_DIR/spinner_helpers.sh"
+source "$CURRENT_DIR/ktab.sh"
 
 # delimiters
 d=$'\t'
@@ -50,6 +52,8 @@ pane_format() {
 	format+="#{pane_pid}"
 	format+="${delimiter}"
 	format+="#{history_size}"
+	format+="${delimiter}"
+	format+="#{@ktab_sidebar}"
 	echo "$format"
 }
 
@@ -189,7 +193,7 @@ fetch_and_dump_grouped_sessions(){
 dump_panes() {
 	local full_command
 	dump_panes_raw |
-		while IFS=$d read line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_pid history_size; do
+		while IFS=$d read line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_pid history_size ktab_sidebar; do
 			# not saving panes from grouped sessions
 			if is_session_grouped "$session_name"; then
 				continue
@@ -197,6 +201,9 @@ dump_panes() {
 			full_command="$(pane_full_command $pane_pid)"
 			dir=$(echo $dir | sed 's/ /\\ /') # escape all spaces in directory path
 			echo "${line_type}${d}${session_name}${d}${window_number}${d}${window_active}${d}${window_flags}${d}${pane_index}${d}${pane_title}${d}${dir}${d}${pane_active}${d}${pane_command}${d}:${full_command}"
+			if [ "$ktab_sidebar" = "1" ]; then
+				printf 'ktab-pane\t%s\t%s\t%s\n' "$session_name" "$window_number" "$pane_index"
+			fi
 		done
 }
 
@@ -221,7 +228,7 @@ dump_state() {
 dump_pane_contents() {
 	local pane_contents_area="$(get_tmux_option "$pane_contents_area_option" "$default_pane_contents_area")"
 	dump_panes_raw |
-		while IFS=$d read line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_pid history_size; do
+		while IFS=$d read line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_pid history_size ktab_sidebar; do
 			capture_pane_contents "${session_name}:${window_number}.${pane_index}" "$history_size" "$pane_contents_area"
 		done
 }
@@ -243,6 +250,7 @@ save_all() {
 	dump_panes   >> "$resurrect_file_path"
 	dump_windows >> "$resurrect_file_path"
 	dump_state   >> "$resurrect_file_path"
+	ktab_save_state "$resurrect_file_path" || return 1
 	execute_hook "post-save-layout" "$resurrect_file_path"
 	if files_differ "$resurrect_file_path" "$last_resurrect_file"; then
 		ln -fs "$(basename "$resurrect_file_path")" "$last_resurrect_file"
@@ -268,7 +276,13 @@ main() {
 		if show_output; then
 			start_spinner "Saving..." "Tmux environment saved!"
 		fi
-		save_all
+		if ! save_all; then
+			if show_output; then
+				stop_spinner
+				display_message "Tmux save failed; previous snapshot retained."
+			fi
+			return 1
+		fi
 		if show_output; then
 			stop_spinner
 			display_message "Tmux environment saved!"

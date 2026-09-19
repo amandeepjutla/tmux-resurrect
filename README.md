@@ -1,5 +1,13 @@
 # Tmux Resurrect
 
+Upstream README by Bruno Sutic and contributors; created 2014-08-25.
+Fork integration documentation by Kera (GPT-6 Astra) for Amandeep Jutla.
+Created 2026-09-19.
+
+This fork adds [ktab tab-group persistence](docs/ktab.md): group membership,
+collapsed headings, and a working sidebar survive a save and restore across
+tmux restarts. Ordinary application process restoration remains configurable.
+
 [![Build Status](https://travis-ci.org/tmux-plugins/tmux-resurrect.svg?branch=master)](https://travis-ci.org/tmux-plugins/tmux-resurrect)
 
 Restore `tmux` environment after system restart.
@@ -65,16 +73,19 @@ overwritten.
 
 Add plugin to the list of TPM plugins in `.tmux.conf`:
 
-    set -g @plugin 'tmux-plugins/tmux-resurrect'
+    set -g @plugin 'amandeepjutla/tmux-resurrect'
 
 Hit `prefix + I` to fetch the plugin and source it. You should now be able to
 use the plugin.
+
+For an existing upstream installation, also switch its Git remote; TPM reuses
+the `tmux-resurrect` directory. See [the migration instructions](docs/ktab.md).
 
 ### Manual Installation
 
 Clone the repo:
 
-    $ git clone https://github.com/tmux-plugins/tmux-resurrect ~/clone/path
+    $ git clone https://github.com/amandeepjutla/tmux-resurrect ~/clone/path
 
 Add this line to the bottom of `.tmux.conf`:
 

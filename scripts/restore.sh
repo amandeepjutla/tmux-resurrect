@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# ktab integration by Kera (GPT-6 Astra). Created 2026-09-19.
 
 CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -6,6 +7,7 @@ source "$CURRENT_DIR/variables.sh"
 source "$CURRENT_DIR/helpers.sh"
 source "$CURRENT_DIR/process_restore_helpers.sh"
 source "$CURRENT_DIR/spinner_helpers.sh"
+source "$CURRENT_DIR/ktab.sh"
 
 # delimiter
 d=$'\t'
@@ -175,7 +177,9 @@ new_pane() {
 
 restore_pane() {
 	local pane="$1"
+	local pane_created
 	while IFS=$d read line_type session_name window_number window_active window_flags pane_index pane_title dir pane_active pane_command pane_full_command; do
+		pane_created="false"
 		dir="$(remove_first_char "$dir")"
 		pane_full_command="$(remove_first_char "$pane_full_command")"
 		if [ "$session_name" == "0" ]; then
@@ -188,6 +192,7 @@ restore_pane() {
 				local pane_id="$(tmux display-message -p -F "#{pane_id}" -t "$session_name:$window_number")"
 				new_pane "$session_name" "$window_number" "$dir" "$pane_index"
 				tmux kill-pane -t "$pane_id"
+				pane_created="true"
 			else
 				# Pane exists, no need to create it!
 				# Pane existence is registered. Later, its process also won't be restored.
@@ -195,13 +200,22 @@ restore_pane() {
 			fi
 		elif window_exists "$session_name" "$window_number"; then
 			new_pane "$session_name" "$window_number" "$dir" "$pane_index"
+			pane_created="true"
 		elif session_exists "$session_name"; then
 			new_window "$session_name" "$window_number" "$dir" "$pane_index"
+			pane_created="true"
 		else
 			new_session "$session_name" "$window_number" "$dir" "$pane_index"
+			pane_created="true"
 		fi
 		# set pane title
 		tmux select-pane -t "$session_name:$window_number.$pane_index" -T "$pane_title"
+		# Only newly restored panes may become sidebar placeholders. An existing
+		# content pane at the same saved index must never be respawned as ktab.
+		if [ "$pane_created" = "true" ] && [ "$KTAB_RESTORE_ACTIVE" = "true" ] &&
+			ktab_saved_sidebar "$session_name" "$window_number" "$pane_index"; then
+			tmux set-option -p -t "$session_name:$window_number.$pane_index" @ktab_sidebar 1
+		fi
 	done < <(echo "$pane")
 }
 
@@ -308,6 +322,9 @@ restore_all_pane_processes() {
 		local pane_full_command
 		awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $11 !~ "^:$" { print $2, $3, $6, $8, $11; }' $(last_resurrect_file) |
 			while IFS=$d read -r session_name window_number pane_index dir pane_full_command; do
+				if ktab_saved_sidebar "$session_name" "$window_number" "$pane_index"; then
+					continue
+				fi
 				dir="$(remove_first_char "$dir")"
 				pane_full_command="$(remove_first_char "$pane_full_command")"
 				restore_pane_process "$pane_full_command" "$session_name" "$window_number" "$pane_index" "$dir"
@@ -366,6 +383,13 @@ cleanup_restored_pane_contents() {
 main() {
 	if supported_tmux_version_ok && check_saved_session_exists; then
 		start_spinner "Restoring..." "Tmux restore complete!"
+		trap 'ktab_resume_restore' EXIT
+		trap 'exit 1' HUP INT TERM
+		if ! ktab_prepare_restore; then
+			stop_spinner
+			display_message "Tmux restore stopped: invalid ktab snapshot."
+			return 1
+		fi
 		execute_hook "pre-restore-all"
 		restore_all_panes
 		handle_session_0
@@ -379,6 +403,11 @@ main() {
 		restore_active_and_alternate_windows
 		restore_active_and_alternate_sessions
 		cleanup_restored_pane_contents
+		if ! ktab_finish_restore; then
+			stop_spinner
+			display_message "Tmux restored; ktab state could not be fully restored."
+			return 1
+		fi
 		execute_hook "post-restore-all"
 		stop_spinner
 		display_message "Tmux restore complete!"
