@@ -121,20 +121,22 @@ def restore(check=True):
 
 try:
     start()
+    book = tm('display-message', '-p', '-t', '0:0', '#{window_id}')
     tm('rename-window', '-t', '0:0', 'book-process')
     tm('split-window', '-d', '-t', '0:0.0', '/bin/sh')
-    tm('new-window', '-d', '-t', '0:2', '-n', 'book-browse', 'exec sleep 600')
-    tm('new-window', '-d', '-t', '0:7', '-n', 'research', '/bin/sh')
+    browse = tm('new-window', '-d', '-P', '-F', '#{window_id}', '-t', '0:2', '-n', 'book-browse', 'exec sleep 600')
+    research = tm('new-window', '-d', '-P', '-F', '#{window_id}', '-t', '0:7', '-n', 'research', '/bin/sh')
     tm('new-session', '-d', '-s', 'notes session', '/bin/sh')
     tm('rename-window', '-t', 'notes session:0', 'notes')
     literal = "Books' \" ; $HOME #{window_name} \\"
-    kt('group', 'set', '0:0', literal)
-    kt('group', 'set', '0:2', literal)
-    kt('group', 'set', '0:7', 'Research')
+    kt('group', 'set', book, literal)
+    kt('group', 'set', browse, literal)
+    kt('group', 'set', research, 'Research')
     kt('group', 'set', 'notes session:0', 'Writing')
     kt('group', 'collapse-all', '0:0')
     drain()
     expected = windows()
+    research_index = tm('display-message', '-p', '-t', research, '#{window_index}')
     expected_content_count = len(content_pids())
     snapshot = save()
     records = [line for line in snapshot.splitlines() if line.startswith('ktab\t')]
@@ -149,8 +151,8 @@ try:
     shutdown()
     start()
     # A new tmux server assigns different IDs; restored identity is name/index.
-    tm('new-window', '-d', '-n', 'temporary', '/bin/sh')
-    tm('kill-window', '-t', '0:1')
+    temporary = tm('new-window', '-d', '-P', '-F', '#{window_id}', '-n', 'temporary', '/bin/sh')
+    tm('kill-window', '-t', temporary)
     assert len(panes()) == 2, 'fresh bootstrap should contain a shell and ktab'
     restore()
     wait_for(lambda: windows() == expected)
@@ -166,8 +168,8 @@ try:
     print('PASS: full server restart restores groups, collapsed active group, content panes and one working sidebar', flush=True)
 
     # A restore into an already populated server must preserve ordinary panes.
-    tm('select-window', '-t', '0:7')
-    wait_for(lambda: tm('display-message', '-p', '-t', sidebar, '#{window_index}') == '7')
+    tm('select-window', '-t', '0:' + research_index)
+    wait_for(lambda: tm('display-message', '-p', '-t', sidebar, '#{window_index}') == research_index)
     tm('split-window', '-d', '-t', '0:0.0', '/bin/sh')
     pids = content_pids()
     restore()
