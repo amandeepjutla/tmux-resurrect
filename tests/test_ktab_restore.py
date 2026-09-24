@@ -220,6 +220,7 @@ try:
     kt('scratch', 'toggle', destination)
     wait_for(lambda: tm('display-message', '-p', '-t', scratch, '#{window_id}') == destination)
     tm('resize-pane', '-t', scratch, '-x', '35')
+    kt('scratch', 'ratio', destination)
     wait_for(lambda: bool(tm('show-option', '-qv', '-t', '0', '@ktab_scratch_ratio')))
     scratch_width = tm('display-message', '-p', '-t', scratch, '#{pane_width}')
     time.sleep(1.1)  # snapshots have one-second names
