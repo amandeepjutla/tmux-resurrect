@@ -7,12 +7,14 @@ Later revisions by Kera (GPT-6 Sol):
 
 - **2026-09-24:** Documented save and restore of the movable scratchpad pane.
 - **2026-09-24:** Recorded the scratchpad's width proportion in the snapshot.
+- **2026-09-24:** Recorded each session's remembered ktab sidebar width.
 
 This fork works with [ktab](https://github.com/amandeepjutla/ktab) to preserve:
 
 - each window's group, including ungrouped windows;
 - each session's collapsed groups;
 - whether the sidebar is enabled;
+- its remembered width for each session;
 - one working sidebar after restoring the saved pane layouts;
 - whether scratchpad 0 was open beside the active tab.
 

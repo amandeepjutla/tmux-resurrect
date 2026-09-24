@@ -222,6 +222,9 @@ try:
     tm('resize-pane', '-t', scratch, '-x', '35')
     kt('scratch', 'ratio', destination)
     wait_for(lambda: bool(tm('show-option', '-qv', '-t', '0', '@ktab_scratch_ratio')))
+    tm('resize-pane', '-t', scratch_sidebar, '-x', '26')
+    kt('sidebar', 'remember', destination)
+    assert tm('show-option', '-qv', '-t', '0', '@ktab_width') == '26'
     scratch_width = tm('display-message', '-p', '-t', scratch, '#{pane_width}')
     time.sleep(1.1)  # snapshots have one-second names
     scratch_snapshot = save()
@@ -231,11 +234,12 @@ try:
     saved_ktab = next(json.loads(line.split('\t', 1)[1]) for line in scratch_snapshot.splitlines() if line.startswith('ktab\t'))
     assert saved_ktab['sessions'][0]['scratch_visible'] is True
     assert saved_ktab['sessions'][0]['scratch_ratio'] > 0
+    assert saved_ktab['sessions'][0]['sidebar_width'] == 26
     assert tm('display-message', '-p', '-t', scratch, '#{window_id}') == destination
     assert tm('display-message', '-p', '-t', scratch, '#{pane_width}') == scratch_width
     assert tm('display-message', '-p', '-t', scratch, '#{pane_pid}') == scratch_pid
     assert tm('show-option', '-qv', '-t', '0', '@ktab_scratch_visible') == '1'
-    assert tm('display-message', '-p', '-t', scratch_sidebar, '#{pane_width}') == '22'
+    assert tm('display-message', '-p', '-t', scratch_sidebar, '#{pane_width}') == '26'
 
     shutdown()
     start()
@@ -249,7 +253,8 @@ try:
     assert sidebar_count() == 1
     restored_sidebar = next(p[2] for p in panes() if p[-1] == '1')
     restored_sidebar_width = tm('display-message', '-p', '-t', restored_sidebar, '#{pane_width}')
-    assert restored_sidebar_width == '22', (restored_sidebar_width, tm('list-panes', '-t', '0:1', '-F', '#{pane_id} #{pane_left} #{pane_width} #{pane_current_command}'))
+    assert restored_sidebar_width == '26', (restored_sidebar_width, tm('list-panes', '-t', '0:1', '-F', '#{pane_id} #{pane_left} #{pane_width} #{pane_current_command}'))
+    assert tm('show-option', '-qv', '-t', '0', '@ktab_width') == '26'
     kt('scratch', 'zero', restored_scratch)
     assert tm('display-message', '-p', '-t', restored_scratch, '#{window_index}') == '0'
     assert len([p for p in panes() if p[1] == '0' and p[-1] != '1']) == 1
