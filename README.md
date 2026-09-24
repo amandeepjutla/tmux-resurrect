@@ -11,6 +11,7 @@ Later revisions by Kera (GPT-6 Astra):
 Later revisions by Kera (GPT-6 Sol):
 
 - **2026-09-24:** Made snapshots park ktab's movable scratchpad pane, then restore its right-hand view after saving and after a server restart.
+- **2026-09-24:** Preserved the scratchpad's content-area width proportion through save and restore.
 
 This fork adds [ktab tab-group persistence](docs/ktab.md): group membership,
 collapsed headings, and a working sidebar survive a save and restore across

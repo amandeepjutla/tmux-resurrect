@@ -213,10 +213,15 @@ try:
     tm('rename-window', '-t', '0:0', 'scratchpad')
     scratch = tm('display-message', '-p', '-t', '0:0', '#{pane_id}')
     scratch_pid = tm('display-message', '-p', '-t', scratch, '#{pane_pid}')
+    scratch_sidebar = next(p[2] for p in panes() if p[-1] == '1')
+    assert tm('display-message', '-p', '-t', scratch_sidebar, '#{pane_width}') == '22'
     destination = tm('new-window', '-d', '-P', '-F', '#{window_id}', '-n', 'working', '/bin/sh')
     tm('select-window', '-t', destination)
     kt('scratch', 'toggle', destination)
     wait_for(lambda: tm('display-message', '-p', '-t', scratch, '#{window_id}') == destination)
+    tm('resize-pane', '-t', scratch, '-x', '35')
+    wait_for(lambda: bool(tm('show-option', '-qv', '-t', '0', '@ktab_scratch_ratio')))
+    scratch_width = tm('display-message', '-p', '-t', scratch, '#{pane_width}')
     time.sleep(1.1)  # snapshots have one-second names
     scratch_snapshot = save()
     saved_panes = [line.split('\t') for line in scratch_snapshot.splitlines() if line.startswith('pane\t')]
@@ -224,9 +229,12 @@ try:
     assert sum(fields[2] == '1' for fields in saved_panes) == 2, saved_panes  # content and sidebar
     saved_ktab = next(json.loads(line.split('\t', 1)[1]) for line in scratch_snapshot.splitlines() if line.startswith('ktab\t'))
     assert saved_ktab['sessions'][0]['scratch_visible'] is True
+    assert saved_ktab['sessions'][0]['scratch_ratio'] > 0
     assert tm('display-message', '-p', '-t', scratch, '#{window_id}') == destination
+    assert tm('display-message', '-p', '-t', scratch, '#{pane_width}') == scratch_width
     assert tm('display-message', '-p', '-t', scratch, '#{pane_pid}') == scratch_pid
     assert tm('show-option', '-qv', '-t', '0', '@ktab_scratch_visible') == '1'
+    assert tm('display-message', '-p', '-t', scratch_sidebar, '#{pane_width}') == '22'
 
     shutdown()
     start()
@@ -235,8 +243,12 @@ try:
     assert tm('show-option', '-qv', '-t', '0', '@ktab_scratch_visible') == '1'
     restored_scratch = tm('show-option', '-qv', '-t', '0', '@ktab_scratch_pane')
     assert tm('display-message', '-p', '-t', restored_scratch, '#{window_index}') == '1'
+    assert tm('display-message', '-p', '-t', restored_scratch, '#{pane_width}') == scratch_width
     assert len([p for p in panes() if p[1] == '0' and p[-1] != '1']) == 1
     assert sidebar_count() == 1
+    restored_sidebar = next(p[2] for p in panes() if p[-1] == '1')
+    restored_sidebar_width = tm('display-message', '-p', '-t', restored_sidebar, '#{pane_width}')
+    assert restored_sidebar_width == '22', (restored_sidebar_width, tm('list-panes', '-t', '0:1', '-F', '#{pane_id} #{pane_left} #{pane_width} #{pane_current_command}'))
     kt('scratch', 'zero', restored_scratch)
     assert tm('display-message', '-p', '-t', restored_scratch, '#{window_index}') == '0'
     assert len([p for p in panes() if p[1] == '0' and p[-1] != '1']) == 1

@@ -6,6 +6,7 @@ Created 2026-09-19.
 Later revisions by Kera (GPT-6 Sol):
 
 - **2026-09-24:** Documented save and restore of the movable scratchpad pane.
+- **2026-09-24:** Recorded the scratchpad's width proportion in the snapshot.
 
 This fork works with [ktab](https://github.com/amandeepjutla/ktab) to preserve:
 
@@ -21,6 +22,8 @@ temporary placeholder. The save then restores the live right-hand view. After
 a server restart, restoring the snapshot reopens the scratchpad beside the
 selected tab. As with other panes, restoring a session does not preserve its
 old process when `@resurrect-processes 'false'` is set.
+The scratchpad's share of the content area, including a manually chosen width,
+is saved and applied when its right-hand view reopens.
 
 Use **prefix + Ctrl-s** to save, then **prefix + Ctrl-r** to restore after a
 restart. Make a new save after installing the integration. Existing snapshots
