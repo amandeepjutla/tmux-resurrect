@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ktab and last-command integration by Kera (GPT-6 Astra). Created 2026-09-19.
+# 2026-09-24: Park the ktab scratchpad during snapshots by Kera (GPT-6 Sol).
 
 CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -248,6 +249,7 @@ remove_old_backups() {
 save_all() {
 	local resurrect_file_path="$(resurrect_file_path)"
 	local last_resurrect_file="$(last_resurrect_file)"
+	ktab_prepare_save || return 1
 	mkdir -p "$(resurrect_dir)"
 	fetch_and_dump_grouped_sessions > "$resurrect_file_path"
 	dump_panes   >> "$resurrect_file_path"
@@ -266,6 +268,7 @@ save_all() {
 		pane_contents_create_archive
 		rm "$(pane_contents_dir "save")"/*
 	fi
+	ktab_finish_save || return 1
 	remove_old_backups
 	execute_hook "post-save-all"
 }
@@ -292,4 +295,5 @@ main() {
 		fi
 	fi
 }
+trap 'ktab_finish_save' EXIT
 main

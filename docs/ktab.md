@@ -3,12 +3,24 @@
 Integration and documentation by Kera (GPT-6 Astra) for Amandeep Jutla.
 Created 2026-09-19.
 
+Later revisions by Kera (GPT-6 Sol):
+
+- **2026-09-24:** Documented save and restore of the movable scratchpad pane.
+
 This fork works with [ktab](https://github.com/amandeepjutla/ktab) to preserve:
 
 - each window's group, including ungrouped windows;
 - each session's collapsed groups;
 - whether the sidebar is enabled;
-- one working sidebar after restoring the saved pane layouts.
+- one working sidebar after restoring the saved pane layouts;
+- whether scratchpad 0 was open beside the active tab.
+
+When the scratchpad is open on the right, a save briefly returns its pane to
+window 0 so the snapshot contains the real scratchpad layout rather than the
+temporary placeholder. The save then restores the live right-hand view. After
+a server restart, restoring the snapshot reopens the scratchpad beside the
+selected tab. As with other panes, restoring a session does not preserve its
+old process when `@resurrect-processes 'false'` is set.
 
 Use **prefix + Ctrl-s** to save, then **prefix + Ctrl-r** to restore after a
 restart. Make a new save after installing the integration. Existing snapshots

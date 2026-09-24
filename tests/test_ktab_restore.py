@@ -1,4 +1,5 @@
 # Kera (GPT-6 Astra). Created 2026-09-19.
+# 2026-09-24: Scratchpad save and restore checks by Kera (GPT-6 Sol).
 """Full save/restart/restore test; only a disposable tmux server is touched."""
 import argparse
 import fcntl
@@ -205,6 +206,41 @@ try:
     assert [line.rsplit('|', 1)[0] for line in windows().splitlines()] == expected_names
     assert sidebar_count() == 0
     print('PASS: legacy save/restore remains usable without ktab', flush=True)
+
+    # Save the canonical layout while the live scratchpad is on the right.
+    shutdown()
+    start()
+    tm('rename-window', '-t', '0:0', 'scratchpad')
+    scratch = tm('display-message', '-p', '-t', '0:0', '#{pane_id}')
+    scratch_pid = tm('display-message', '-p', '-t', scratch, '#{pane_pid}')
+    destination = tm('new-window', '-d', '-P', '-F', '#{window_id}', '-n', 'working', '/bin/sh')
+    tm('select-window', '-t', destination)
+    kt('scratch', 'toggle', destination)
+    wait_for(lambda: tm('display-message', '-p', '-t', scratch, '#{window_id}') == destination)
+    time.sleep(1.1)  # snapshots have one-second names
+    scratch_snapshot = save()
+    saved_panes = [line.split('\t') for line in scratch_snapshot.splitlines() if line.startswith('pane\t')]
+    assert sum(fields[2] == '0' for fields in saved_panes) == 1, saved_panes
+    assert sum(fields[2] == '1' for fields in saved_panes) == 2, saved_panes  # content and sidebar
+    saved_ktab = next(json.loads(line.split('\t', 1)[1]) for line in scratch_snapshot.splitlines() if line.startswith('ktab\t'))
+    assert saved_ktab['sessions'][0]['scratch_visible'] is True
+    assert tm('display-message', '-p', '-t', scratch, '#{window_id}') == destination
+    assert tm('display-message', '-p', '-t', scratch, '#{pane_pid}') == scratch_pid
+    assert tm('show-option', '-qv', '-t', '0', '@ktab_scratch_visible') == '1'
+
+    shutdown()
+    start()
+    restore()
+    assert tm('display-message', '-p', '-t', '0:0', '#{window_name}') == 'scratchpad'
+    assert tm('show-option', '-qv', '-t', '0', '@ktab_scratch_visible') == '1'
+    restored_scratch = tm('show-option', '-qv', '-t', '0', '@ktab_scratch_pane')
+    assert tm('display-message', '-p', '-t', restored_scratch, '#{window_index}') == '1'
+    assert len([p for p in panes() if p[1] == '0' and p[-1] != '1']) == 1
+    assert sidebar_count() == 1
+    kt('scratch', 'zero', restored_scratch)
+    assert tm('display-message', '-p', '-t', restored_scratch, '#{window_index}') == '0'
+    assert len([p for p in panes() if p[1] == '0' and p[-1] != '1']) == 1
+    print('PASS: visible scratchpad saves without placeholder, reopens after restore, and returns to tab 0', flush=True)
 finally:
     shutdown()
     tmp.cleanup()
